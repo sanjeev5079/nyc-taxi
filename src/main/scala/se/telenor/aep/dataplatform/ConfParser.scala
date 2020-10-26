@@ -24,7 +24,6 @@ case class JobConfig(
   joinQueryToBuildTable: String,
   firstRun: String)
 
-
 object ConfParser {
   def apply(appConf: Config): ConfParser = new ConfParser(appConf)
 }
