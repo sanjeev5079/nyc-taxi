@@ -1,0 +1,6 @@
+[repositories]
+  local
+  nexus: http://nexus.se.telenor.net/repository/scala-maven
+  ivy: https://nexus.se.telenor.net/repository/scala-ivy, [organization]/[module]/(scala_[scalaVersion]/)(sbt_[sbtVersion]/)[revision]/[type]s/[artifact](-[classifier]).[ext]
+  telenor-maven-release: https://nexus.se.telenor.net/repository/maven-releases
+  telenor-maven-snapshot: https://nexus.se.telenor.net/repository/maven-snapshots
