@@ -29,7 +29,7 @@ default_args = {
     #'on_failure_callback': email_sender.task_failure_callback
 }
 load_to_access = DAG(
-    'data-erasure-v3',
+    'data-erasure-v4',
     default_args=default_args,
     start_date=start_schedule,
     schedule_interval=daily_schedule,
