@@ -14,12 +14,56 @@ object EnrichBlacklist extends Logging {
 
   def getBlacklist(db: String, table: String, currRunDate: String): DataFrame = {
 
-    val sqlStmt = s"""SELECT
+    val oldBlDf = spark.sql(
+      s"""
+         |SELECT DISTINCT
+         |org_pers_id, account, subs_id, msisdn
+         |FROM $db.$table
+         |WHERE ingestion_date < "$currRunDate"
+         |AND msisdn is not null
+         |""".stripMargin)
+
+    val currentBlDf = spark.sql(
+      s"""
+         |SELECT
+         | *
+         | FROM $db.$table
+         | WHERE ingestion_date = '$currRunDate' """.stripMargin).dropDuplicates(Array("timestamp", "org_pers_id", "account", "subs_id", "msisdn")).distinct()
+
+    val finalBlDf = currentBlDf.alias("df1")
+      .join(broadcast(oldBlDf.alias("df2")), col("df1.subs_id") === col("df2.subs_id"), "left")
+      .select(
+        col("df1.timestamp"),
+        col("df1.org_pers_id"),
+        col("df1.account"),
+        col("df1.subs_id"),
+        coalesce(
+          col("df1.msisdn"),
+          col("df2.msisdn")).alias("msisdn"),
+        col("df1.ingestion_date"),
+        col("df1.lineage"))
+
+    /*val finalBlDf = oldBlDf.alias("df2")
+      .join(broadcast(currentBlDf.alias("df1")), col("df1.subs_id") === col("df2.subs_id"), "right")
+      .select(
+        col("df1.timestamp"),
+        col("df1.org_pers_id"),
+        col("df1.account"),
+        col("df1.subs_id"),
+        coalesce(
+          col("df1.msisdn"),
+          col("df2.msisdn")).alias("msisdn"),
+        col("df1.ingestion_date"),
+        col("df1.lineage"))*/
+
+    finalBlDf
+
+    /*val sqlStmt = s"""SELECT
                      | *
                      | FROM $db.$table
                      | WHERE ingestion_date = '$currRunDate' """.stripMargin
     log.info(sqlStmt)
-    spark.sql(sqlStmt).dropDuplicates(Array("timestamp", "org_pers_id", "account", "subs_id", "msisdn")).distinct()
+    spark.sql(sqlStmt).dropDuplicates(Array("timestamp", "org_pers_id", "account", "subs_id", "msisdn")).distinct()*/
   }
 
   def enrichWithMSISDN(blDf: DataFrame): DataFrame = {

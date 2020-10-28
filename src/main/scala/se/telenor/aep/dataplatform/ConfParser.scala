@@ -10,8 +10,7 @@ class ConfParser(appConf: Config) {
       appConf.getString("erasure.prevSucessRunDate"),
       appConf.getString("erasure.db"),
       appConf.getString("erasure.table"),
-      appConf.getString("erasure.joinQueryToBuildTable"),
-      appConf.getString("erasure.firstRun"))
+      appConf.getString("erasure.joinQueryToBuildTable"))
   }
 }
 
@@ -21,8 +20,7 @@ case class JobConfig(
   prevSuccessRunDate: String,
   erasureDb: String,
   erasureTable: String,
-  joinQueryToBuildTable: String,
-  firstRun: String)
+  joinQueryToBuildTable: String)
 
 object ConfParser {
   def apply(appConf: Config): ConfParser = new ConfParser(appConf)

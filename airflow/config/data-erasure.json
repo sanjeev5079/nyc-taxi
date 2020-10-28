@@ -5,7 +5,6 @@
         "is_active" : "true",
         "db" : "access_salsa",
         "table": "subs_dummy",
-        "first_run": "false",
         "join_query_to_build_table_should_contain_blacklist_column": ""
       },
       {

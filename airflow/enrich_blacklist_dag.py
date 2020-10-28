@@ -14,7 +14,7 @@ start_schedule = datetime.strptime("2020-10-09","%Y-%m-%d")
 ds = "{{ ds }}"
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
-load_jar_location = os.path.join(current_dir, "lib", "aep-etl-salsa-assembly-0.1.0-SNAPSHOT.jar")
+load_jar_location = os.path.join(current_dir, "lib", "aep-elt-data-erasure-assembly-0.1.0-SNAPSHOT.jar")
 
 default_args = {
     'owner': 'data-platform, Sanjeev',

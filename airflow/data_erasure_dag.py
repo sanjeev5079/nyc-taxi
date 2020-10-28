@@ -15,7 +15,7 @@ ds = "{{ ds }}"
 prev_ds = "{{ prev_execution_date_success }}"
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
-load_jar_location = os.path.join(current_dir, "lib", "aep-etl-salsa-assembly-0.1.0-SNAPSHOT.jar")
+load_jar_location = os.path.join(current_dir, "lib", "aep-elt-data-erasure-assembly-0.1.0-SNAPSHOT.jar")
 
 
 default_args = {
@@ -39,8 +39,6 @@ load_to_access = DAG(
 )
 
 is_active_default = "false"
-first_run_default = "false"
-
 
 def create_table_pipeline(schema, spec, pool):
     is_active = spec.get("is_active") or is_active_default
@@ -64,7 +62,6 @@ def create_table_pipeline(schema, spec, pool):
                 "spark.yarn.appMasterEnv.erasure_db": db,
                 "spark.yarn.appMasterEnv.erasure_table": table,
                 "spark.yarn.appMasterEnv.join_query_to_build_table": join_query,
-                "spark.yarn.appMasterEnv.first_run": first_run or first_run_default
             },
             java_class="se.telenor.aep.dataplatform.DataErasure",
             name="Data-Erasure-%s (%s)" % (table, ds),
