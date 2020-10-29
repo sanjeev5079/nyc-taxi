@@ -38,7 +38,7 @@ object EnrichBlacklist extends Logging {
          |SELECT
          | *
          | FROM $db.$table
-         | WHERE ingestion_date = '$currRunDate' """.stripMargin).dropDuplicates(Array("timestamp", "org_pers_id", "account", "subs_id", "msisdn")).distinct()
+         | WHERE ingestion_date = '$currRunDate' """.stripMargin).dropDuplicates(Array("timestamp", "org_pers_id", "account", "subs_id", "msisdn")) //.distinct()
 
     val finalBlDf = currentBlDf.alias("df1")
       .join(broadcast(oldBlDf.alias("df2")), col("df1.subs_id") === col("df2.subs_id"), "left")
