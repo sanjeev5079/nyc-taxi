@@ -325,8 +325,6 @@ object DataErasure extends Logging {
 
     val blFilteringKeysDf = getBlFilteringKeys(blHighestOrderFilterCol, blDf)
 
-    //wholeTableDf.persist(StorageLevel.MEMORY_AND_DISK)
-    //blFilteringKeysDf.persist(StorageLevel.MEMORY_ONLY)
     val cleanDataDf = getCleanData(wholeTableDf, tableHighestOrderFilterCol, blFilteringKeysDf)
     log.info("Columns of DF cleaned of blacklist records are: " + cleanDataDf.schema.mkString(","))
     val finalDf = if (joinQueryToBuildTable.toLowerCase.contains("join")) {
@@ -334,8 +332,6 @@ object DataErasure extends Logging {
     } else cleanDataDf
 
     log.info("Columns of the final DF to be written are: " + finalDf.schema.mkString(","))
-    //log.info("Total blacklist filtering keys count: " + blFilteringKeysDf.count().toString)
-    //log.info("Total count of records to be re-written: " + finalDf.count().toString)
 
     stageMetrics.runAndMeasure { writeData(finalDf, db, table) }
     val jobMatrixDf = stageMetrics.createStageMetricsDF("PerfStageMetrics")
@@ -345,8 +341,6 @@ object DataErasure extends Logging {
       tableHighestOrderFilterCol,
       joinQueryToBuildTable,
       jc.currentRunDate)
-    //wholeTableDf.unpersist()
-    //blFilteringKeysDf.unpersist()
 
   }
 }
