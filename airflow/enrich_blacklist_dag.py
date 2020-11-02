@@ -27,7 +27,7 @@ default_args = {
     #'on_failure_callback': email_sender.task_failure_callback
 }
 enrich_black_list = DAG(
-    'enrich-blacklist-v4',
+    'enrich-blacklist-v5',
     default_args=default_args,
     start_date=start_schedule,
     schedule_interval=daily_schedule,

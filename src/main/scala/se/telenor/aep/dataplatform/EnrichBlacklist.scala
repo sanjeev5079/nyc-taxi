@@ -64,6 +64,49 @@ object EnrichBlacklist extends Logging {
   }
 
   /**
+   * Modified as per BL in Access layer.
+   * Gets the latest blacklist with all the mapped msisdns from previous days BL.
+   * 1. oldBlDf: take all old BLv, distinct on org_pers_id, account, subs_id, msisdn, where msisdn is null.
+   * 2. currentBlDf: Get BL from the run days' partition. Remove the duplicates based on "timestamp", "org_pers_id", "account", "subs_id", "msisdn".
+   * 3. finalBlDf: Left join currentBlDf and oldBlDf on subs_id. Coalesces msisdn from bothe the DataFrames.
+   * @param currRunDate
+   * @return :  DataFrame: Latest BL updated with already mapped msisdns.
+   */
+  def getBlacklistAccess(currRunDate: String): DataFrame = {
+
+    val oldBlDf = spark.sql(
+      s"""
+         |SELECT DISTINCT
+         |org_pers_id, account, subs_id, msisdn
+         |FROM operations_matrix.blacklist_access
+         |WHERE ingestion_date < "$currRunDate"
+         |AND msisdn is not null
+         |""".stripMargin)
+
+    val currentBlDf = spark.sql(
+      s"""
+         |SELECT
+         | *
+         | FROM operations_matrix.blacklist
+         | WHERE ingestion_date = '$currRunDate' """.stripMargin).dropDuplicates(Array("timestamp", "org_pers_id", "account", "subs_id", "msisdn")) //.distinct()
+
+    val finalBlDf = currentBlDf.alias("df1")
+      .join(broadcast(oldBlDf.alias("df2")), col("df1.subs_id") === col("df2.subs_id"), "left")
+      .select(
+        col("df1.timestamp"),
+        col("df1.org_pers_id"),
+        col("df1.account"),
+        col("df1.subs_id"),
+        coalesce(
+          col("df1.msisdn"),
+          col("df2.msisdn")).alias("msisdn"),
+        col("df1.ingestion_date"),
+        col("df1.lineage"))
+
+    finalBlDf
+  }
+
+  /**
    * Enriches the new BL with msisdn using subs_extended table from Salsa DB.
    * @param blDf: Blacklist DF.
    * @return: DataFrame: BL Enriched with msisdn.
@@ -116,11 +159,12 @@ object EnrichBlacklist extends Logging {
     spark.conf.set("hive.exec.dynamic.partition", true)
     spark.conf.set("hive.exec.dynamic.partition.mode", "nonstrict")
 
-    val blDf = getBlacklist("operations_matrix", "blacklist", jc.currentRunDate)
+    //val blDf = getBlacklist("operations_matrix", "blacklist", jc.currentRunDate)
+    val blDf = getBlacklistAccess(jc.currentRunDate)
 
     val blDfMSISDN = enrichWithMSISDN(blDf)
 
-    stageMetrics.runAndMeasure { writeBlacklist(blDfMSISDN, "operations_matrix", "blacklist") }
+    stageMetrics.runAndMeasure { writeBlacklist(blDfMSISDN, "operations_matrix", "blacklist_access") }
     val jobMatrixDf = stageMetrics.createStageMetricsDF("PerfStageMetrics")
     jobMatrixDf.show(100, false)
 

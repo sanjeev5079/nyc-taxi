@@ -21,7 +21,7 @@ object DataErasure extends Logging {
    * @param currRunDate
    * @return :  DataFrame with blacklist.
    */
-  def getBlacklist(blacklistBaseFilePath: String, prevSuccessRunDate: String, currRunDate: String): DataFrame = {
+  def getBlacklist2(blacklistBaseFilePath: String, prevSuccessRunDate: String, currRunDate: String): DataFrame = {
     //if (prevSuccessRunDate != "None") {
     //  log.info("Blacklist delta will be calculated as previous success run date is found: " + prevSuccessRunDate)
 
@@ -99,6 +99,26 @@ object DataErasure extends Logging {
   }
 
   /**
+   * Gets the Blacklist for the run date. Does distinct on  org_pers_id, account, subs_id, msisdn.
+   * If in future more columns are added in Blaklist then that column should be added in distinct.
+   * @param db
+   * @param table
+   * @param currRunDate
+   * @return :  DataFrame with blacklist.
+   */
+  def getBlacklist(db: String, table: String, currRunDate: String): DataFrame = {
+
+    spark.sql(
+      s"""
+         |SELECT DISTINCT
+         |org_pers_id, account, subs_id, msisdn
+         |FROM $db.$table
+         |WHERE ingestion_date = "$currRunDate"
+         |""".stripMargin)
+
+  }
+
+  /**
    * Gets the main table's complete data, and its columns.
    * @param db
    * @param table
@@ -159,7 +179,7 @@ object DataErasure extends Logging {
   def getBlFilteringKeys(filterCol: String, df: DataFrame): DataFrame = {
     val blFilteringKeys = filterCol match {
       case "" => df.select().toDF() // return blank df TODO: logic for joins when no blcol exists
-      case _ => df.select(filterCol).distinct().where(col(filterCol).notEqual("NULL") || col(filterCol).notEqual(null)).toDF() //.collect().map(row => row.mkString) //bl data can have duplicates. distinct will reduce values in IN /NOT IN clause
+      case _ => df.select(filterCol).where(col(filterCol).notEqual("NULL") || col(filterCol).notEqual(null)).distinct().toDF() //.collect().map(row => row.mkString) //bl data can have duplicates. distinct will reduce values in IN /NOT IN clause
     }
     blFilteringKeys
   }
@@ -308,7 +328,8 @@ object DataErasure extends Logging {
     val joinQueryToBuildTable = jc.joinQueryToBuildTable
     val prevSuccessRunDate = "[0-9]{4}-[0-9]{2}-[0-9]{2}".r.findFirstMatchIn(jc.prevSuccessRunDate).getOrElse("None").toString
 
-    val blDf = getBlacklist(jc.blacklistFileBasePath, prevSuccessRunDate, jc.currentRunDate)
+    //val blDf = getBlacklist2(jc.blacklistFileBasePath, prevSuccessRunDate, jc.currentRunDate)
+    val blDf = getBlacklist("operations_matrix", "blacklist_access", jc.currentRunDate)
 
     val (wholeTableDf, tblColumns) = getTableDataAndCols(db, table, joinQueryToBuildTable)
     val highestOrderFilterCol = getHighestOrderFilterCol(tblColumns)
@@ -318,9 +339,12 @@ object DataErasure extends Logging {
       blHighestOrderFilterCol = highestOrderFilterCol.get(0)
       tableHighestOrderFilterCol = highestOrderFilterCol.get(1)
       log.info("Filter Column from Blacklist and Table respectively are : " + blHighestOrderFilterCol + " & " + tableHighestOrderFilterCol)
+
     } catch {
-      case e: NoSuchElementException => log.error(s"Table $db.$table may not contain any of the blacklist columns (org number, account, subs id, msisdn). " +
-        s"Pass a specific join query to tag one of the blacklist columns from configuration file.")
+      case e: NoSuchElementException =>
+        log.error(s"ERROR: Table $db.$table may not contain any of the blacklist columns (org number, account, subs id, msisdn). ")
+        log.error(s"ERROR: If table has PII columns, then pass a specific join query to tag one of the blacklist columns from configuration file. If table has no PII then do not configure this table for Data Erasure.")
+        log.error(s"ERROR: Job will fail with java.lang.ArrayIndexOutOfBoundsException. To avoid, tag atleast one blacklist column in the data.")
     }
 
     val blFilteringKeysDf = getBlFilteringKeys(blHighestOrderFilterCol, blDf)
