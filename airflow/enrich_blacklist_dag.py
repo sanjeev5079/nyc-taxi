@@ -31,8 +31,8 @@ enrich_black_list = DAG(
     default_args=default_args,
     start_date=start_schedule,
     schedule_interval=daily_schedule,
-    concurrency=2,
-    max_active_runs=2,
+    concurrency=5,
+    max_active_runs=5,
     dagrun_timeout=timedelta(days=1)
 )
 

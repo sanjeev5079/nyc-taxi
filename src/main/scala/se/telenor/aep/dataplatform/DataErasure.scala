@@ -113,7 +113,7 @@ object DataErasure extends Logging {
          |SELECT DISTINCT
          |org_pers_id, account, subs_id, msisdn
          |FROM $db.$table
-         |WHERE ingestion_date = "$currRunDate"
+         |WHERE ds = "$currRunDate"
          |""".stripMargin)
 
   }

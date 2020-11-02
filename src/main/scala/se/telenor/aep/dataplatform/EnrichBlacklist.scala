@@ -79,7 +79,7 @@ object EnrichBlacklist extends Logging {
          |SELECT DISTINCT
          |org_pers_id, account, subs_id, msisdn
          |FROM operations_matrix.blacklist_access
-         |WHERE ingestion_date < "$currRunDate"
+         |WHERE ds < "$currRunDate"
          |AND msisdn is not null
          |""".stripMargin)
 
@@ -143,7 +143,7 @@ object EnrichBlacklist extends Logging {
 
     val insertStmt =
       s"""INSERT OVERWRITE TABLE $db.$table
-        PARTITION(ingestion_date, lineage)
+        PARTITION(ds)
         SELECT *
         FROM enriched_blacklist_tmp
         """.stripMargin
