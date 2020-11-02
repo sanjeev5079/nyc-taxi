@@ -18,7 +18,7 @@ load_jar_location = os.path.join(current_dir, "lib", "aep-elt-data-erasure-assem
 
 default_args = {
     'owner': 'data-platform, Sanjeev',
-    'depends_on_past': False,
+    'depends_on_past': True,
     'email_on_failure': True,
     'email_on_retry': False,
     'email': 'sanjeev.kumar@telenor.se',
@@ -31,9 +31,9 @@ enrich_black_list = DAG(
     default_args=default_args,
     start_date=start_schedule,
     schedule_interval=daily_schedule,
-    concurrency=5,
-    max_active_runs=5,
-    dagrun_timeout=timedelta(days=1)
+    concurrency=2,
+    max_active_runs=2,
+    dagrun_timeout=timedelta(hours=4)
 )
 
 env = "prod"

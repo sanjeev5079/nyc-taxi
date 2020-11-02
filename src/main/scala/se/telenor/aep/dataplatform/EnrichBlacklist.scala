@@ -100,8 +100,8 @@ object EnrichBlacklist extends Logging {
         coalesce(
           col("df1.msisdn"),
           col("df2.msisdn")).alias("msisdn"),
-        col("df1.ingestion_date"),
         col("df1.lineage"))
+      .withColumn("ds", lit(currRunDate))
 
     finalBlDf
   }
