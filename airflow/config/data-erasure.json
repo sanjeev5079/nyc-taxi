@@ -5,7 +5,7 @@
         "is_active" : "true",
         "db" : "access_salsa",
         "table": "subs_dummy",
-        "join_query_to_build_table_should_contain_blacklist_column": "select * from access_salsa.service_request_case_category"
+        "join_query_to_build_table_should_contain_blacklist_column": ""
       },
       {
         "is_active" : "true",

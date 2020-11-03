@@ -195,7 +195,7 @@ object DataErasure extends Logging {
    * @param blDf
    * @return DataFrame: data without BL users from the affected partitions only.
    */
-  def getCleanData(wholeTableDf: DataFrame, filterCol: String, blDf: DataFrame): DataFrame = {
+  def getCleanData_old(wholeTableDf: DataFrame, filterCol: String, blDf: DataFrame): DataFrame = {
 
     val blJoinCol = blDf.schema.fieldNames(0)
     val intermediateDf = wholeTableDf.select(col(filterCol), col("ds")).distinct() //.toDF()
@@ -204,6 +204,7 @@ object DataErasure extends Logging {
       .as("df1")
       .join(broadcast(blDf.as("df2")), col(s"df1.$filterCol") === col(s"df2.$blJoinCol"), "inner")
       .select("df1.ds").distinct() //.toDF()
+    val affectedPartitions = affectedPartitionsDf.collect().map(row => row.mkString).mkString(",")
 
     val dataFromAffectedPartitionsDf = wholeTableDf
       .as("df1")
@@ -220,6 +221,46 @@ object DataErasure extends Logging {
       .select("df1.*")
 
     nonBlDatafromAffectedPartitionsDf
+  }
+
+  /**
+   * Gets clean data to be finally written back on to the disk.
+   * 1. intermediateDf: selects only filter col and ds. This reduces data to be joined.
+   * 2. affectedPartitionsDf: Distinct partitions that have BL data. Inner join on filter column (wholeTableDf, intermediateDf).
+   * 3. dataFromAffectedPartitionsDf: Select all data from affected partitons only. Inner join on on ds (wholeTableDf, affectedPartitionsDf).
+   * 4. nonBlDatafromAffectedPartitionsDf: Data without BL users. Left anti join on filter col (dataFromAffectedPartitionsDf, blDf )
+   * @param wholeTableDf
+   * @param filterCol
+   * @param blDf
+   * @return DataFrame: data without BL users from the affected partitions only.
+   */
+  def getCleanData(wholeTableDf: DataFrame, filterCol: String, blDf: DataFrame): (DataFrame, String) = {
+
+    val blJoinCol = blDf.schema.fieldNames(0)
+    val intermediateDf = wholeTableDf.select(col(filterCol), col("ds")).distinct() //.toDF()
+
+    val affectedPartitionsDf = intermediateDf
+      .as("df1")
+      .join(broadcast(blDf.as("df2")), col(s"df1.$filterCol") === col(s"df2.$blJoinCol"), "inner")
+      .select("df1.ds").distinct() //.toDF()
+    val affectedPartitions = affectedPartitionsDf.collect().map(row => row.mkString).mkString(",")
+    log.info("Affected partitions to be over-written are: " + affectedPartitions)
+
+    val dataFromAffectedPartitionsDf = wholeTableDf
+      .as("df1")
+      .join(broadcast(affectedPartitionsDf.as("df2")), col("df1.ds") === col("df2.ds"), "inner")
+      .select("df1.*")
+
+    //below code is to avoid a join on whole table which has duplicates as all the partitions are being processed..
+    //val whereIn = "\"" + affectedPartitionsDf.collect().map(row => row.mkString).mkString("\",\"") + "\""
+    //val dataFromAffectedPartitionsDf = wholeTableDf.where(s""" ds in ($whereIn)  """)
+
+    val nonBlDatafromAffectedPartitionsDf = dataFromAffectedPartitionsDf
+      .as("df1")
+      .join(broadcast(blDf.as("df2")), col(s"df1.$filterCol") === col(s"df2.$blJoinCol"), "leftanti")
+      .select("df1.*")
+
+    (nonBlDatafromAffectedPartitionsDf, affectedPartitions)
   }
 
   /**
@@ -268,25 +309,29 @@ object DataErasure extends Logging {
     dataTable: String = "",
     blacklistFilterCol: String = "",
     userQuery: String = "",
-    runDate: String): Unit = {
+    runDate: String,
+    affectedPartitions: String): Unit = {
 
     val numBlacklistRecord = jobMatrixDf
+      .orderBy(asc("stageId"))
       .select("recordsRead")
-      .where("""  stageId = "1" """).take(1).map(row => row.mkString).mkString
+      .where(""" name like CONCAT('run at ThreadPoolExecutor', '%') """)
+      .take(1).map(row => row.mkString).mkString
 
     val dataErasureMatrixTmp = jobMatrixDf
       .select("recordsRead", "bytesRead", "recordsWritten", "bytesWritten")
-      .where("""  stageId = "10" """)
+      .where(""" name like CONCAT('sql at DataErasure', '%') """)
 
     val dataErasureMatrix = dataErasureMatrixTmp
       .withColumn("table", lit(dataTable))
-      .withColumn("user_query", lit(userQuery))
+      .withColumn("user_query", lit(userQuery.replaceAll("\n", " ")))
       .withColumn("blacklist_col", lit(blacklistFilterCol))
       .withColumn("blacklist_records", lit(numBlacklistRecord))
       .withColumnRenamed("recordsRead", "records_read")
       .withColumnRenamed("recordsWritten", "records_written")
       .withColumnRenamed("bytesRead", "bytes_read")
       .withColumnRenamed("bytesWritten", "bytes_written")
+      .withColumn("affected_partitions", lit(affectedPartitions))
       .withColumn("ts", lit(System.currentTimeMillis()))
       .withColumn("table_name", lit(dataTable))
       .withColumn("ds", lit(runDate))
@@ -299,6 +344,7 @@ object DataErasure extends Logging {
         "records_written",
         "bytes_read",
         "bytes_written",
+        "affected_partitions",
         "ts",
         "table_name",
         "ds")
@@ -349,7 +395,7 @@ object DataErasure extends Logging {
 
     val blFilteringKeysDf = getBlFilteringKeys(blHighestOrderFilterCol, blDf)
 
-    val cleanDataDf = getCleanData(wholeTableDf, tableHighestOrderFilterCol, blFilteringKeysDf)
+    val (cleanDataDf, affectedPartitions) = getCleanData(wholeTableDf, tableHighestOrderFilterCol, blFilteringKeysDf)
     log.info("Columns of DF cleaned of blacklist records are: " + cleanDataDf.schema.mkString(","))
     val finalDf = if (joinQueryToBuildTable.toLowerCase.contains("join")) {
       cleanDataDf.drop(tableHighestOrderFilterCol)
@@ -364,7 +410,8 @@ object DataErasure extends Logging {
       table,
       tableHighestOrderFilterCol,
       joinQueryToBuildTable,
-      jc.currentRunDate)
+      jc.currentRunDate,
+      if (affectedPartitions == "") "None" else affectedPartitions)
 
   }
 }

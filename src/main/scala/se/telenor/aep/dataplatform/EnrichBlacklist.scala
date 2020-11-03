@@ -87,7 +87,7 @@ object EnrichBlacklist extends Logging {
       s"""
          |SELECT
          | *
-         | FROM operations_matrix.blacklist
+         | FROM operations_matrix.blacklist_raw
          | WHERE ingestion_date = '$currRunDate' """.stripMargin).dropDuplicates(Array("timestamp", "org_pers_id", "account", "subs_id", "msisdn")) //.distinct()
 
     val finalBlDf = currentBlDf.alias("df1")
@@ -139,7 +139,8 @@ object EnrichBlacklist extends Logging {
    */
   def writeBlacklist(df: DataFrame, db: String, table: String): Unit = {
 
-    df.coalesce(1).createOrReplaceTempView("enriched_blacklist_tmp")
+    //df.coalesce(1).createOrReplaceTempView("enriched_blacklist_tmp")
+    df.createOrReplaceTempView("enriched_blacklist_tmp")
 
     val insertStmt =
       s"""INSERT OVERWRITE TABLE $db.$table

@@ -9,8 +9,8 @@ import json
 import glob
 
 daily_schedule = "5 11 * * *"  # Daily at 3 PM CET and 2 PM UTC time
-# start_schedule = datetime.strptime("2020-05-09","%Y-%m-%d")
-start_schedule = airflow.utils.dates.days_ago(5)
+start_schedule = datetime.strptime("2020-10-09","%Y-%m-%d")
+# start_schedule = airflow.utils.dates.days_ago(5)
 ds = "{{ ds }}"
 prev_ds = "{{ prev_execution_date_success }}"
 

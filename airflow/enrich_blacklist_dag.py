@@ -31,8 +31,8 @@ enrich_black_list = DAG(
     default_args=default_args,
     start_date=start_schedule,
     schedule_interval=daily_schedule,
-    concurrency=2,
-    max_active_runs=2,
+    concurrency=4,
+    max_active_runs=4,
     dagrun_timeout=timedelta(hours=4)
 )
 
@@ -65,8 +65,8 @@ enrich_blacklist = SparkSubmitOperator(
     application=load_jar_location,
     conf={
         "spark.yarn.executor.memoryOverhead": "2G",
-        "spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version": "1",
-        "spark.hadoop.hive.output.file.extension": "-enriched.csv",
+        "spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version": "2",
+        "spark.hadoop.hive.output.file.extension": "-enriched.parquet",
         "spark.yarn.appMasterEnv.current_rundate": ds
     },
     java_class="se.telenor.aep.dataplatform.EnrichBlacklist",
