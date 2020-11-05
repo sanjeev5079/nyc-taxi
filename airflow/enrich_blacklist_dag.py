@@ -55,7 +55,7 @@ file_sensor = S3KeySensor(
 refresh_table = BashOperator(
     task_id="refresh-blacklist",
     bash_command=refresh_table,
-    params={"database_name": "operations_matrix", "table_name": "blacklist"},
+    params={"database_name": "operations_matrix", "table_name": "blacklist_raw"},
     dag=enrich_black_list
 )
 
