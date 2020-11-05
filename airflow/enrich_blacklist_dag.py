@@ -65,7 +65,7 @@ enrich_blacklist = SparkSubmitOperator(
     application=load_jar_location,
     conf={
         "spark.yarn.executor.memoryOverhead": "2G",
-        "spark.driver.memory": "2G",
+        "spark.driver.memory": "1G",
         "spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version": "2",
         "spark.hadoop.hive.output.file.extension": "-enriched.parquet",
         "spark.yarn.appMasterEnv.current_rundate": ds

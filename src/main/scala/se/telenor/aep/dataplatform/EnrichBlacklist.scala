@@ -120,8 +120,10 @@ object EnrichBlacklist extends Logging {
 
     val originalColSequence = blDf.schema.fieldNames
 
+    //Below logic is would give duplicates but this is accepted to cate to corner cases.
+    //Duplicates are removed later
     //-----
-    val nullMsisdnInBlDf = blDf.where(""" msisdn is null """)
+    /*val nullMsisdnInBlDf = blDf.where(""" msisdn is null """)
     val nonNullMsisdnInBlDf = blDf.where(""" msisdn is not null """)
 
     val newlyMappedMsisdnInBlDf = nullMsisdnInBlDf.as("df1")
@@ -131,7 +133,7 @@ object EnrichBlacklist extends Logging {
       .withColumnRenamed("msisdn_extended", "msisdn")
       .select(originalColSequence.map(col): _*)
 
-    val enrichedBlDf = nonNullMsisdnInBlDf.union(newlyMappedMsisdnInBlDf)
+    val enrichedBlDf = nonNullMsisdnInBlDf.union(newlyMappedMsisdnInBlDf)*/
     //-----
 
     /*val intermediateDf = blDf.where(""" msisdn is not null """).select(col("subs_id")).distinct()
@@ -157,16 +159,18 @@ object EnrichBlacklist extends Logging {
         col("df1.lineage"),
         col("df1.ds")) */
 
-    /*val enrichedBlDf = broadcast(blDf
+    //Below logic is would give duplicates but this is accepted to cate to corner cases.
+    //Duplicates are removed later
+    val enrichedBlDf = broadcast(blDf
       .as("df1"))
       .join(subsExtendedDf.as("df2"), col(s"df1.subs_id") === col(s"df2.subs_id_extended"), "left")
       .drop(col("df2.subs_id_extended"))
       .drop(col("df1.msisdn"))
       .withColumnRenamed("msisdn_extended", "msisdn")
-      .select(originalColSequence.map(col): _*)*/
+      .select(originalColSequence.map(col): _*)
 
     //enrichedBlDf
-    enrichedBlDf
+    enrichedBlDf.distinct()
   }
 
   /**
