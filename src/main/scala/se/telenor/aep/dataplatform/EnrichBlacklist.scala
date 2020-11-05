@@ -77,7 +77,7 @@ object EnrichBlacklist extends Logging {
     val oldBlDf = spark.sql(
       s"""
          |SELECT DISTINCT
-         |org_pers_id, account, subs_id, msisdn
+         |subs_id, msisdn
          |FROM operations_matrix.blacklist_access
          |WHERE ds < "$currRunDate"
          |AND msisdn is not null
@@ -103,7 +103,7 @@ object EnrichBlacklist extends Logging {
         col("df1.lineage"))
       .withColumn("ds", lit(currRunDate))
 
-    finalBlDf
+    finalBlDf.distinct()
   }
 
   /**
@@ -111,7 +111,7 @@ object EnrichBlacklist extends Logging {
    * @param blDf: Blacklist DF.
    * @return: DataFrame: BL Enriched with msisdn.
    */
-  def enrichWithMSISDN(blDf: DataFrame): DataFrame = {
+  def enrichWithMSISDN(blDf: DataFrame, currRunDate: String): DataFrame = {
     val subsExtendedDf = spark.sql(
       """SELECT
         |DISTINCT subs_id AS subs_id_extended, msisdn AS msisdn_extended
@@ -120,14 +120,52 @@ object EnrichBlacklist extends Logging {
 
     val originalColSequence = blDf.schema.fieldNames
 
-    val enrichedBlDf = broadcast(blDf
-      .as("df1"))
-      .join(subsExtendedDf.as("df2"), col(s"df1.subs_id") === col(s"df2.subs_id_extended"), "left")
+    //-----
+    val nullMsisdnInBlDf = blDf.where(""" msisdn is null """)
+    val nonNullMsisdnInBlDf = blDf.where(""" msisdn is not null """)
+
+    val newlyMappedMsisdnInBlDf = nullMsisdnInBlDf.as("df1")
+      .join(subsExtendedDf.as("df2"), col(s"df2.subs_id_extended") === col(s"df1.subs_id"), "left")
       .drop(col("df2.subs_id_extended"))
       .drop(col("df1.msisdn"))
       .withColumnRenamed("msisdn_extended", "msisdn")
       .select(originalColSequence.map(col): _*)
 
+    val enrichedBlDf = nonNullMsisdnInBlDf.union(newlyMappedMsisdnInBlDf)
+    //-----
+
+    /*val intermediateDf = blDf.where(""" msisdn is not null """).select(col("subs_id")).distinct()
+    val excludeAlreadyMappedSubsIdsDf = subsExtendedDf
+      .as("df1")
+      .join(broadcast(intermediateDf.as("df2")), col(s"df1.subs_id_extended") === col(s"df2.subs_id"), "leftanti")
+      .select("df1.*")
+
+    val enrichedBlDf = blDf
+      .as("df1")
+      .join(excludeAlreadyMappedSubsIdsDf.as("df2"), col(s"df1.subs_id") === col(s"df2.subs_id_extended"), "left")
+      //.drop(col("df2.subs_id_extended"))
+      //.drop(col("df1.msisdn"))
+      //.withColumnRenamed("msisdn_extended", "msisdn")
+      .select(
+        col("df1.timestamp"),
+        col("df1.org_pers_id"),
+        col("df1.account"),
+        col("df1.subs_id"),
+        coalesce(
+          col("df1.msisdn"),
+          col("df2.msisdn_extended")).alias("msisdn"),
+        col("df1.lineage"),
+        col("df1.ds")) */
+
+    /*val enrichedBlDf = broadcast(blDf
+      .as("df1"))
+      .join(subsExtendedDf.as("df2"), col(s"df1.subs_id") === col(s"df2.subs_id_extended"), "left")
+      .drop(col("df2.subs_id_extended"))
+      .drop(col("df1.msisdn"))
+      .withColumnRenamed("msisdn_extended", "msisdn")
+      .select(originalColSequence.map(col): _*)*/
+
+    //enrichedBlDf
     enrichedBlDf
   }
 
@@ -140,6 +178,7 @@ object EnrichBlacklist extends Logging {
   def writeBlacklist(df: DataFrame, db: String, table: String): Unit = {
 
     //df.coalesce(1).createOrReplaceTempView("enriched_blacklist_tmp")
+    //df.orderBy(col("ds")).createOrReplaceTempView("enriched_blacklist_tmp")
     df.createOrReplaceTempView("enriched_blacklist_tmp")
 
     val insertStmt =
@@ -163,7 +202,7 @@ object EnrichBlacklist extends Logging {
     //val blDf = getBlacklist("operations_matrix", "blacklist", jc.currentRunDate)
     val blDf = getBlacklistAccess(jc.currentRunDate)
 
-    val blDfMSISDN = enrichWithMSISDN(blDf)
+    val blDfMSISDN = enrichWithMSISDN(blDf, jc.currentRunDate)
 
     stageMetrics.runAndMeasure { writeBlacklist(blDfMSISDN, "operations_matrix", "blacklist_access") }
     val jobMatrixDf = stageMetrics.createStageMetricsDF("PerfStageMetrics")

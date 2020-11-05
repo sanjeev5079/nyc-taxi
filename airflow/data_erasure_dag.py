@@ -53,6 +53,7 @@ def create_table_pipeline(schema, spec, pool):
             application=load_jar_location,
             conf={
                 "spark.executor.memoryOverhead": "2G",
+                "spark.driver.memory": "2G",
                 "spark.hadoop.hive.output.file.extension": "-erased-blacklist.parquet",
                 "spark.sql.shuffle.partitions": "1500",
                 "spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version": "1",
