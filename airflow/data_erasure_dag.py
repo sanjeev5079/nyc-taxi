@@ -4,11 +4,12 @@ import logging
 from airflow import DAG
 from datetime import timedelta, datetime
 from airflow.contrib.operators.spark_submit_operator import SparkSubmitOperator
+from airflow.operators.bash_operator import BashOperator
 # from util import email_sender
 import json
 import glob
 
-daily_schedule = "5 11 * * *"  # Daily at 3 PM CET and 2 PM UTC time
+daily_schedule = "5 11 * * *"
 start_schedule = datetime.strptime("2020-10-09","%Y-%m-%d")
 # start_schedule = airflow.utils.dates.days_ago(5)
 ds = "{{ ds }}"
@@ -33,12 +34,15 @@ load_to_access = DAG(
     default_args=default_args,
     start_date=start_schedule,
     schedule_interval=daily_schedule,
-    concurrency=12,
-    max_active_runs=12,
+    concurrency=5,
+    max_active_runs=5,
     dagrun_timeout=timedelta(days=1)
 )
 
 is_active_default = "false"
+refresh_table = """
+        beeline -u 'jdbc:hive2://lb-impala-c03fa9db7669945b.elb.eu-north-1.amazonaws.com:21050/default;principal=impala/lb-impala-c03fa9db7669945b.elb.eu-north-1.amazonaws.com@TSE.AWS.CLOUD;auth-kerberos' -e "use {{ params.database_name }}; invalidate metadata {{ params.table_name }};"
+        """
 
 def create_table_pipeline(schema, spec, pool):
     is_active = spec.get("is_active") or is_active_default
@@ -77,7 +81,13 @@ def create_table_pipeline(schema, spec, pool):
             pool=pool,
             dag=load_to_access
         )
-        erasure_job
+        refresh_impala = BashOperator(
+            task_id="refresh-%s" % table,
+            bash_command=refresh_table,
+            params={"database_name": db, "table_name": table},
+            dag=load_to_access
+        )
+        erasure_job >> refresh_impala
 
 # Read JSON File
 def read_conf():

@@ -9,7 +9,8 @@ from airflow.contrib.operators.spark_submit_operator import SparkSubmitOperator
 # from util import email_sender
 
 daily_schedule = "30 00 * * *"
-start_schedule = datetime.strptime("2020-10-09","%Y-%m-%d")
+start_schedule = datetime.strptime("2020-10-21","%Y-%m-%d")
+# end_schedule = datetime.strptime("2020-10-21","%Y-%m-%d")
 # start_schedule = airflow.utils.dates.days_ago(5)
 ds = "{{ ds }}"
 
