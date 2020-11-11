@@ -16,55 +16,55 @@ object DataErasure extends Logging {
   /**
    * Gets the Blacklist for the run date. Does distinct on  org_pers_id, account, subs_id, msisdn.
    * If in future more columns are added in Blaklist then that column should be added in distinct.
-   * @param blacklistBaseFilePath
-   * @param prevSuccessRunDate : not being used
-   * @param currRunDate
-   * @return :  DataFrame with blacklist.
+   * //@param blacklistBaseFilePath
+   * //@param prevSuccessRunDate : not being used
+   * //@param currRunDate
+   * //@return :  DataFrame with blacklist.
    */
-  def getBlacklist2(blacklistBaseFilePath: String, prevSuccessRunDate: String, currRunDate: String): DataFrame = {
-    //if (prevSuccessRunDate != "None") {
-    //  log.info("Blacklist delta will be calculated as previous success run date is found: " + prevSuccessRunDate)
+  //def getBlacklist2(blacklistBaseFilePath: String, prevSuccessRunDate: String, currRunDate: String): DataFrame = {
+  //if (prevSuccessRunDate != "None") {
+  //  log.info("Blacklist delta will be calculated as previous success run date is found: " + prevSuccessRunDate)
 
-    //  val prevSuccessBl = spark.read.format("csv")
-    //    .option("header", "true")
-    //    .option("inferSchema", "true")
-    //    .load(blacklistBaseFilePath + "/ingestion_date=" + prevSuccessRunDate + "/*")
+  //  val prevSuccessBl = spark.read.format("csv")
+  //    .option("header", "true")
+  //    .option("inferSchema", "true")
+  //    .load(blacklistBaseFilePath + "/ingestion_date=" + prevSuccessRunDate + "/*")
 
-    //  val currBl = spark.read.format("csv")
-    //    .option("header", "true")
-    //    .option("inferSchema", "true")
-    //    .load(blacklistBaseFilePath + "/ingestion_date=" + currRunDate + "/*")
+  //  val currBl = spark.read.format("csv")
+  //    .option("header", "true")
+  //    .option("inferSchema", "true")
+  //    .load(blacklistBaseFilePath + "/ingestion_date=" + currRunDate + "/*")
 
-    //  currBl.except(prevSuccessBl).toDF()
-    //} else {
-    //  log.info("Blacklisting will be performed on whole list as previous success run date is not found.")
-    //  spark.read.format("csv")
-    //    .option("header", "true")
-    //    .option("inferSchema", "true")
-    //    .option("escape", "\"")
-    //    .option("encoding", "UTF-8")
-    //    .load(blacklistBaseFilePath + "/ingestion_date=" + currRunDate + "/*")
-    //}
+  //  currBl.except(prevSuccessBl).toDF()
+  //} else {
+  //  log.info("Blacklisting will be performed on whole list as previous success run date is not found.")
+  //  spark.read.format("csv")
+  //    .option("header", "true")
+  //    .option("inferSchema", "true")
+  //    .option("escape", "\"")
+  //    .option("encoding", "UTF-8")
+  //    .load(blacklistBaseFilePath + "/ingestion_date=" + currRunDate + "/*")
+  //}
 
-    ////if (firstRun.toLowerCase != "true") {
-    ////log.info("Its not a first run.")
+  ////if (firstRun.toLowerCase != "true") {
+  ////log.info("Its not a first run.")
 
-    //spark.read.format("csv")
-    //.option("header", "true")
-    //.option("inferSchema", "true")
-    //.option("escape", "\"")
-    //.option("encoding", "UTF-8")
-    //.load(blacklistBaseFilePath + "/ingestion_date=" + currRunDate + "/*")
+  //spark.read.format("csv")
+  //.option("header", "true")
+  //.option("inferSchema", "true")
+  //.option("escape", "\"")
+  //.option("encoding", "UTF-8")
+  //.load(blacklistBaseFilePath + "/ingestion_date=" + currRunDate + "/*")
 
-    spark.sql(
+  /*spark.sql(
       s"""
            |SELECT DISTINCT
            |org_pers_id, account, subs_id, msisdn
            |FROM operations_matrix.blacklist
            |WHERE ingestion_date = "$currRunDate"
-           |""".stripMargin)
+           |""".stripMargin) */
 
-    /*} else {
+  /*} else {
 
       log.info("Its a first run.")
       val currentBLDf = spark.sql(
@@ -96,11 +96,11 @@ object DataErasure extends Logging {
       finalBlDf.toDF()
     }*/
 
-  }
+  //}
 
   /**
    * Gets the Blacklist for the run date. Does distinct on  org_pers_id, account, subs_id, msisdn.
-   * If in future more columns are added in Blaklist then that column should be added in distinct.
+   * If in future more columns are added in the Blacklist then that column should be added in distinct.
    * @param db
    * @param table
    * @param currRunDate
@@ -119,20 +119,21 @@ object DataErasure extends Logging {
   }
 
   /**
-   * Gets the main table's complete data, and its columns.
+   * Gets the main table's data which is older than or equal to the Data Erasure's run date, and its columns.
    * @param db
    * @param table
    * @param joinQueryToBuildTable : User can pass a custom query. This could be a join query if table has indirect filtering.
    * @return : DataFrame: Main table's data.
    *           Array[String]: Column names.
    */
-  def getTableDataAndCols(db: String, table: String, joinQueryToBuildTable: String): (DataFrame, Array[String]) = {
+  def getTableDataAndCols(db: String, table: String, currRunDate: String, joinQueryToBuildTable: String): (DataFrame, Array[String]) = {
     log.info("Join query passed from configuration file is: " + joinQueryToBuildTable)
     val (wholeTableDf, columns) = if (joinQueryToBuildTable != "" && joinQueryToBuildTable != null && joinQueryToBuildTable != "None") {
       val df = spark.sql(joinQueryToBuildTable)
       (df, df.schema.fieldNames)
     } else {
-      val df = spark.sql("SELECT * FROM " + db + "." + table)
+      log.info("Sql stmt to select from data table: " + s"SELECT * FROM  $db.$table where ds <= '$currRunDate'")
+      val df = spark.sql(s"SELECT * FROM  $db.$table where ds <= '$currRunDate'")
       (df, df.schema.fieldNames)
     }
     (wholeTableDf, columns)
@@ -190,12 +191,12 @@ object DataErasure extends Logging {
    * 2. affectedPartitionsDf: Distinct partitions that have BL data. Inner join on filter column (wholeTableDf, intermediateDf).
    * 3. dataFromAffectedPartitionsDf: Select all data from affected partitons only. Inner join on on ds (wholeTableDf, affectedPartitionsDf).
    * 4. nonBlDatafromAffectedPartitionsDf: Data without BL users. Left anti join on filter col (dataFromAffectedPartitionsDf, blDf )
-   * @param wholeTableDf
-   * @param filterCol
-   * @param blDf
-   * @return DataFrame: data without BL users from the affected partitions only.
+   * //@param wholeTableDf
+   * //@param filterCol
+   * //@param blDf
+   * //@return DataFrame: data without BL users from the affected partitions only.
    */
-  def getCleanData_old(wholeTableDf: DataFrame, filterCol: String, blDf: DataFrame): DataFrame = {
+  /*def getCleanData_old(wholeTableDf: DataFrame, filterCol: String, blDf: DataFrame): DataFrame = {
 
     val blJoinCol = blDf.schema.fieldNames(0)
     val intermediateDf = wholeTableDf.select(col(filterCol), col("ds")).distinct() //.toDF()
@@ -221,7 +222,7 @@ object DataErasure extends Logging {
       .select("df1.*")
 
     nonBlDatafromAffectedPartitionsDf
-  }
+  }*/
 
   /**
    * Gets clean data to be finally written back on to the disk.
@@ -349,8 +350,10 @@ object DataErasure extends Logging {
         "table_name",
         "ds")
 
-    dataErasureMatrix.coalesce(1).createOrReplaceTempView("tmpTbl")
     //jobMatrixDf.show(100, false)
+
+    dataErasureMatrix.coalesce(1).createOrReplaceTempView("tmpTbl")
+
     val insertStmt =
       s"""INSERT INTO TABLE operations_matrix.data_erasure_matrix
         PARTITION(table_name, ds)
@@ -377,7 +380,7 @@ object DataErasure extends Logging {
     //val blDf = getBlacklist2(jc.blacklistFileBasePath, prevSuccessRunDate, jc.currentRunDate)
     val blDf = getBlacklist("operations_matrix", "blacklist_access", jc.currentRunDate)
 
-    val (wholeTableDf, tblColumns) = getTableDataAndCols(db, table, joinQueryToBuildTable)
+    val (wholeTableDf, tblColumns) = getTableDataAndCols(db, table, jc.currentRunDate, joinQueryToBuildTable)
     val highestOrderFilterCol = getHighestOrderFilterCol(tblColumns)
 
     var (blHighestOrderFilterCol, tableHighestOrderFilterCol) = ("", "")
