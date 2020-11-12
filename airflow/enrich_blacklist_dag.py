@@ -37,9 +37,10 @@ enrich_black_list = DAG(
     dagrun_timeout=timedelta(hours=4)
 )
 
-env = "prod"
+env = "{{ var.value.env }}"
 refresh_table = """
-        beeline -u 'jdbc:hive2://sandbox-lb-hive-31ce76d535dafae7.elb.eu-north-1.amazonaws.com:10000/default;principal=hive/sandbox-lb-hive-31ce76d535dafae7.elb.eu-north-1.amazonaws.com@TSE.AWS.CLOUD;auth-kerberos' -e "use {{ params.database_name }}; msck repair table {{ params.table_name }};"
+        kinit -k -t {{ var.value.keytab }} {{ var.value.principal }}
+        beeline -u 'jdbc:hive2://{{ var.value.hive_loadbalancer }}:10000/default;principal=hive/{{ var.value.hive_loadbalancer }}@TSE.AWS.CLOUD;auth-kerberos' -e "use {{ params.database }}; msck repair table {{ params.table }};"
         """
 
 file_sensor = S3KeySensor(
@@ -56,7 +57,7 @@ file_sensor = S3KeySensor(
 refresh_table = BashOperator(
     task_id="refresh-blacklist",
     bash_command=refresh_table,
-    params={"database_name": "operations_matrix", "table_name": "blacklist_raw"},
+    params={"database": "operations_matrix", "table": "blacklist_raw"},
     dag=enrich_black_list
 )
 
@@ -78,8 +79,8 @@ enrich_blacklist = SparkSubmitOperator(
     executor_memory="3G",
     num_executors=10,
     spark_binary="/usr/bin/spark2-submit",
-    principal="airflow@TSE.AWS.CLOUD",
-    keytab="/home/airflow/airflow.keytab",
+    principal="{{ var.value.principal }}",
+    keytab="{{ var.value.keytab }}",
     pool='default_pool',
     dag=enrich_black_list
 )
