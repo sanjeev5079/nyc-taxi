@@ -41,13 +41,15 @@ load_to_access = DAG(
 
 is_active_default = "false"
 refresh_table = """
-        beeline -u 'jdbc:hive2://lb-impala-c03fa9db7669945b.elb.eu-north-1.amazonaws.com:21050/default;principal=impala/lb-impala-c03fa9db7669945b.elb.eu-north-1.amazonaws.com@TSE.AWS.CLOUD;auth-kerberos' -e "use {{ params.database_name }}; invalidate metadata {{ params.table_name }};"
+        kinit -k -t {{ var.value.keytab }} {{ var.value.principal }}
+        impala-shell -i {{ var.value.impala_loadbalancer }} -q "use {{ params.database }}; invalidate metadata {{ params.table }};"
         """
+# beeline -u 'jdbc:hive2://lb-impala-c03fa9db7669945b.elb.eu-north-1.amazonaws.com:21050/default;principal=impala/lb-impala-c03fa9db7669945b.elb.eu-north-1.amazonaws.com@TSE.AWS.CLOUD;auth-kerberos' -e "use {{ params.database_name }}; invalidate metadata {{ params.table_name }};"
 
 def create_table_pipeline(schema, spec, pool):
     is_active = spec.get("is_active") or is_active_default
     if is_active == "true":
-        env = "prod"
+        env =  "{{ var.value.env }}"
         db = spec.get("db").lower()
         table = spec.get("table").lower()
         first_run = spec.get("first_run")
@@ -75,8 +77,8 @@ def create_table_pipeline(schema, spec, pool):
             executor_memory="4G",
             num_executors=10,
             spark_binary="/usr/bin/spark2-submit",
-            principal="airflow@TSE.AWS.CLOUD",
-            keytab="/home/airflow/airflow.keytab",
+            principal="{ var.value.principal }}",
+            keytab="{{ var.value.keytab }}",
             application_args=[],
             pool=pool,
             dag=load_to_access
@@ -84,7 +86,7 @@ def create_table_pipeline(schema, spec, pool):
         refresh_impala = BashOperator(
             task_id="refresh-%s" % table,
             bash_command=refresh_table,
-            params={"database_name": db, "table_name": table},
+            params={"database": db, "table": table},
             dag=load_to_access
         )
         erasure_job >> refresh_impala
