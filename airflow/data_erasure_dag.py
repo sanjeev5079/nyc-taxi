@@ -77,7 +77,7 @@ def create_table_pipeline(schema, spec, pool):
             executor_memory="4G",
             num_executors=10,
             spark_binary="/usr/bin/spark2-submit",
-            principal="{ var.value.principal }}",
+            principal="{{ var.value.principal }}",
             keytab="{{ var.value.keytab }}",
             application_args=[],
             pool=pool,
