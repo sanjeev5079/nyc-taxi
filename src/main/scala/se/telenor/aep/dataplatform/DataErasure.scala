@@ -9,9 +9,9 @@ import ch.cern.sparkmeasure
 
 object DataErasure extends Logging {
 
-  val spark = SparkSession.builder()
+  /*val spark = SparkSession.builder()
     .appName("DataErasure")
-    .getOrCreate()
+    .getOrCreate()*/
 
   /**
    * Gets the Blacklist for the run date. Does distinct on  org_pers_id, account, subs_id, msisdn.
@@ -101,12 +101,17 @@ object DataErasure extends Logging {
   /**
    * Gets the Blacklist for the run date. Does distinct on  org_pers_id, account, subs_id, msisdn.
    * If in future more columns are added in the Blacklist then that column should be added in distinct.
+   * @param spark : spark session
    * @param db
    * @param table
    * @param currRunDate
    * @return :  DataFrame with blacklist.
    */
-  def getBlacklist(db: String, table: String, currRunDate: String): DataFrame = {
+  def getBlacklist(
+    spark: SparkSession,
+    db: String,
+    table: String,
+    currRunDate: String): DataFrame = {
 
     spark.sql(
       s"""
@@ -120,13 +125,20 @@ object DataErasure extends Logging {
 
   /**
    * Gets the main table's data which is older than or equal to the Data Erasure's run date, and its columns.
+   * @param spark : spark session
    * @param db
    * @param table
    * @param joinQueryToBuildTable : User can pass a custom query. This could be a join query if table has indirect filtering.
    * @return : DataFrame: Main table's data.
    *           Array[String]: Column names.
    */
-  def getTableDataAndCols(db: String, table: String, currRunDate: String, joinQueryToBuildTable: String): (DataFrame, Array[String]) = {
+  def getTableDataAndCols(
+    spark: SparkSession,
+    db: String,
+    table: String,
+    currRunDate: String,
+    joinQueryToBuildTable: String): (DataFrame, Array[String]) = {
+
     log.info("Join query passed from configuration file is: " + joinQueryToBuildTable)
     val (wholeTableDf, columns) = if (joinQueryToBuildTable != "" && joinQueryToBuildTable != null && joinQueryToBuildTable != "None") {
       val df = spark.sql(joinQueryToBuildTable)
@@ -234,8 +246,12 @@ object DataErasure extends Logging {
    * @param filterCol
    * @param blDf
    * @return DataFrame: data without BL users from the affected partitions only.
+   *         AffectedPartitions
    */
-  def getCleanData(wholeTableDf: DataFrame, filterCol: String, blDf: DataFrame): (DataFrame, String) = {
+  def getCleanData(
+    wholeTableDf: DataFrame,
+    filterCol: String,
+    blDf: DataFrame): (DataFrame, String) = {
 
     val blJoinCol = blDf.schema.fieldNames(0)
     val intermediateDf = wholeTableDf.select(col(filterCol), col("ds")).distinct() //.toDF()
@@ -266,12 +282,19 @@ object DataErasure extends Logging {
 
   /**
    * Over writes the affected partitions with cleaned data.
+   * @param spark : spark session
    * @param df
    * @param db
    * @param table
    * @param partitionCol
    */
-  def writeData(df: DataFrame, db: String, table: String, partitionCol: String = "ds"): Unit = {
+  def writeData(
+    spark: SparkSession,
+    df: DataFrame,
+    db: String,
+    table: String,
+    partitionCol: String = "ds"): Unit = {
+
     val tmpTable = table + "_tmp"
     df.createOrReplaceTempView(tmpTable)
 
@@ -298,7 +321,7 @@ object DataErasure extends Logging {
    * "ts", : time in ms, when records is inserted. This makes a record unique.
    * "table_name",
    * "ds"
-   *
+   * @param spark : spark session
    * @param jobMatrixDf: matrix on the job.
    * @param dataTable
    * @param blacklistFilterCol
@@ -306,12 +329,15 @@ object DataErasure extends Logging {
    * @param runDate
    */
   def writeJobMatrix(
+    spark: SparkSession,
     jobMatrixDf: DataFrame,
     dataTable: String = "",
     blacklistFilterCol: String = "",
     userQuery: String = "",
     runDate: String,
-    affectedPartitions: String): Unit = {
+    affectedPartitions: String,
+    matrixDb: String,
+    matrixTable: String): Unit = {
 
     val numBlacklistRecord = jobMatrixDf
       .orderBy(asc("stageId"))
@@ -355,7 +381,7 @@ object DataErasure extends Logging {
     dataErasureMatrix.coalesce(1).createOrReplaceTempView("tmpTbl")
 
     val insertStmt =
-      s"""INSERT INTO TABLE operations_matrix.data_erasure_matrix
+      s"""INSERT INTO TABLE $matrixDb.$matrixTable
         PARTITION(table_name, ds)
         SELECT *
         FROM tmpTbl
@@ -366,6 +392,9 @@ object DataErasure extends Logging {
 
   def main(args: Array[String]): Unit = {
 
+    val spark = SparkSession.builder()
+      .appName("DataErasure")
+      .getOrCreate()
     val appConf = ConfigFactory.load()
     val jc = ConfParser(appConf).getConf
     val stageMetrics = sparkmeasure.StageMetrics(spark)
@@ -378,9 +407,9 @@ object DataErasure extends Logging {
     val prevSuccessRunDate = "[0-9]{4}-[0-9]{2}-[0-9]{2}".r.findFirstMatchIn(jc.prevSuccessRunDate).getOrElse("None").toString
 
     //val blDf = getBlacklist2(jc.blacklistFileBasePath, prevSuccessRunDate, jc.currentRunDate)
-    val blDf = getBlacklist("operations_matrix", "blacklist_access", jc.currentRunDate)
+    val blDf = getBlacklist(spark, "operations_matrix", "blacklist_access", jc.currentRunDate)
 
-    val (wholeTableDf, tblColumns) = getTableDataAndCols(db, table, jc.currentRunDate, joinQueryToBuildTable)
+    val (wholeTableDf, tblColumns) = getTableDataAndCols(spark, db, table, jc.currentRunDate, joinQueryToBuildTable)
     val highestOrderFilterCol = getHighestOrderFilterCol(tblColumns)
 
     var (blHighestOrderFilterCol, tableHighestOrderFilterCol) = ("", "")
@@ -406,15 +435,18 @@ object DataErasure extends Logging {
 
     log.info("Columns of the final DF to be written are: " + finalDf.schema.mkString(","))
 
-    stageMetrics.runAndMeasure { writeData(finalDf, db, table) }
+    stageMetrics.runAndMeasure { writeData(spark, finalDf, db, table) }
     val jobMatrixDf = stageMetrics.createStageMetricsDF("PerfStageMetrics")
     writeJobMatrix(
+      spark,
       jobMatrixDf,
       table,
       tableHighestOrderFilterCol,
       joinQueryToBuildTable,
       jc.currentRunDate,
-      if (affectedPartitions == "") "None" else affectedPartitions)
+      if (affectedPartitions == "") "None" else affectedPartitions,
+      "operations_matrix",
+      "data_erasure_matrix")
 
   }
 }

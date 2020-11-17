@@ -8,21 +8,25 @@ import ch.cern.sparkmeasure
 
 object EnrichBlacklist extends Logging {
 
-  val spark = SparkSession.builder()
+  /*val spark = SparkSession.builder()
     .appName("EnrichBlacklist")
-    .getOrCreate()
+    .getOrCreate()*/
 
   /**
    * Gets the latest blacklist with all the mapped msisdns from previous days BL.
    * 1. oldBlDf: take all old BLv, distinct on org_pers_id, account, subs_id, msisdn, where msisdn is null.
    * 2. currentBlDf: Get BL from the run days' partition. Remove the duplicates based on "timestamp", "org_pers_id", "account", "subs_id", "msisdn".
    * 3. finalBlDf: Left join currentBlDf and oldBlDf on subs_id. Coalesces msisdn from bothe the DataFrames.
+   * @param spark : spark session
    * @param db
    * @param table
    * @param currRunDate
    * @return :  DataFrame: Latest BL updated with already mapped msisdns.
    */
-  def getBlacklist(db: String, table: String, currRunDate: String): DataFrame = {
+  def getBlacklist(spark: SparkSession)(
+    db: String,
+    table: String,
+    currRunDate: String): DataFrame = {
 
     val oldBlDf = spark.sql(
       s"""
@@ -69,16 +73,21 @@ object EnrichBlacklist extends Logging {
    * 1. oldBlDf: take all old BLv, distinct on org_pers_id, account, subs_id, msisdn, where msisdn is null.
    * 2. currentBlDf: Get BL from the run days' partition. Remove the duplicates based on "timestamp", "org_pers_id", "account", "subs_id", "msisdn".
    * 3. finalBlDf: Left join currentBlDf and oldBlDf on subs_id. Coalesces msisdn from bothe the DataFrames.
+   * @param spark : spark session
    * @param currRunDate
    * @return :  DataFrame: Latest BL updated with already mapped msisdns.
    */
-  def getBlacklistAccess(currRunDate: String): DataFrame = {
+  def getBlacklistAccess(spark: SparkSession)(
+    currRunDate: String,
+    db: String,
+    tableRaw: String,
+    tableAccess: String): DataFrame = {
 
     val oldBlDf = spark.sql(
       s"""
          |SELECT DISTINCT
          |subs_id, msisdn
-         |FROM operations_matrix.blacklist_access
+         |FROM $db.$tableAccess
          |WHERE ds < "$currRunDate"
          |AND msisdn is not null
          |""".stripMargin)
@@ -87,7 +96,7 @@ object EnrichBlacklist extends Logging {
       s"""
          |SELECT
          | *
-         | FROM operations_matrix.blacklist_raw
+         | FROM $db.$tableRaw
          | WHERE ingestion_date = '$currRunDate' and timestamp != 'TIMESTAMP' """.stripMargin).dropDuplicates(Array("timestamp", "org_pers_id", "account", "subs_id", "msisdn")) //.distinct()
 
     val finalBlDf = currentBlDf.alias("df1")
@@ -108,14 +117,20 @@ object EnrichBlacklist extends Logging {
 
   /**
    * Enriches the new BL with msisdn using subs_extended table from Salsa DB.
+   * @param spark : spark session
    * @param blDf: Blacklist DF.
    * @return: DataFrame: BL Enriched with msisdn.
    */
-  def enrichWithMSISDN(blDf: DataFrame, currRunDate: String): DataFrame = {
+  def enrichWithMSISDN(spark: SparkSession)(
+    blDf: DataFrame,
+    currRunDate: String,
+    db: String,
+    table: String): DataFrame = {
+
     val subsExtendedDf = spark.sql(
-      """SELECT
+      s"""SELECT
         |DISTINCT subs_id AS subs_id_extended, msisdn AS msisdn_extended
-        |FROM access_salsa.subs_extended where subs_id is not null
+        |FROM $db.$table where subs_id is not null and ds <= '$currRunDate'
         |""".stripMargin)
 
     val originalColSequence = blDf.schema.fieldNames
@@ -175,11 +190,15 @@ object EnrichBlacklist extends Logging {
 
   /**
    * Writes enriched BL back to the run date partition with Overwite mode.
+   * @param spark : spark session
    * @param df: Final enriched BL Df.
    * @param db
    * @param table
    */
-  def writeBlacklist(df: DataFrame, db: String, table: String): Unit = {
+  def writeBlacklist(spark: SparkSession)(
+    df: DataFrame,
+    db: String,
+    table: String): Unit = {
 
     //df.coalesce(1).createOrReplaceTempView("enriched_blacklist_tmp")
     //df.orderBy(col("ds")).createOrReplaceTempView("enriched_blacklist_tmp")
@@ -197,6 +216,9 @@ object EnrichBlacklist extends Logging {
 
   def main(args: Array[String]): Unit = {
 
+    val spark = SparkSession.builder()
+      .appName("EnrichBlacklist")
+      .getOrCreate()
     val appConf = ConfigFactory.load()
     val jc = ConfParser(appConf).getConf
     val stageMetrics = sparkmeasure.StageMetrics(spark)
@@ -204,11 +226,19 @@ object EnrichBlacklist extends Logging {
     spark.conf.set("hive.exec.dynamic.partition.mode", "nonstrict")
 
     //val blDf = getBlacklist("operations_matrix", "blacklist", jc.currentRunDate)
-    val blDf = getBlacklistAccess(jc.currentRunDate)
+    val blDf = getBlacklistAccess(spark)(
+      jc.currentRunDate,
+      "operations_matrix",
+      "blacklist_raw",
+      "blacklist_access")
 
-    val blDfMSISDN = enrichWithMSISDN(blDf, jc.currentRunDate)
+    val blDfMSISDN = enrichWithMSISDN(spark)(
+      blDf,
+      jc.currentRunDate,
+      "access_salsa",
+      "subs_extended")
 
-    stageMetrics.runAndMeasure { writeBlacklist(blDfMSISDN, "operations_matrix", "blacklist_access") }
+    stageMetrics.runAndMeasure { writeBlacklist(spark)(blDfMSISDN, "operations_matrix", "blacklist_access") }
     val jobMatrixDf = stageMetrics.createStageMetricsDF("PerfStageMetrics")
     jobMatrixDf.show(100, false)
 
