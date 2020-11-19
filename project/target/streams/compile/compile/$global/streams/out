@@ -1,0 +1,7 @@
+[0m[[0m[31merror[0m] [0m[0mC:\Users\sk936000\git-projects\aep-elt-data-erasure\project\Build.scala:21:7: ')' expected but string literal found.[0m
+[0m[[0m[31merror[0m] [0m[0m      "org.apache.spark"     %% "spark-hive"         % sparkVersion                  % "test"[0m
+[0m[[0m[31merror[0m] [0m[0m      ^[0m
+[0m[[0m[31merror[0m] [0m[0mC:\Users\sk936000\git-projects\aep-elt-data-erasure\project\Build.scala:45:1: ')' expected but '}' found.[0m
+[0m[[0m[31merror[0m] [0m[0m}[0m
+[0m[[0m[31merror[0m] [0m[0m^[0m
+[0m[[0m[31merror[0m] [0m[0mtwo errors found[0m
