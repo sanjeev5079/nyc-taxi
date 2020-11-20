@@ -28,7 +28,7 @@ default_args = {
     #'on_failure_callback': email_sender.task_failure_callback
 }
 enrich_black_list = DAG(
-    'enrich-blacklist-v5',
+    'enrich-blacklist-daily',
     default_args=default_args,
     start_date=start_schedule,
     schedule_interval=daily_schedule,
@@ -43,6 +43,10 @@ refresh_table = """
         beeline -u 'jdbc:hive2://{{ var.value.hive_loadbalancer }}:10000/default;principal=hive/{{ var.value.hive_loadbalancer }}@TSE.AWS.CLOUD;auth-kerberos' -e "use {{ params.database }}; msck repair table {{ params.table }};"
         """
 
+refresh_impala = """
+        impala-shell -i {{ var.value.impala_loadbalancer }} -q "invalidate metadata {{ params.database }}.{{ params.table }};"
+        """
+
 file_sensor = S3KeySensor(
     task_id="s3-check-blacklist",
     bucket_key="s3a://telenor-se-aep-{env}-operations/RAW/EXPORTS/BLACKLIST/ingestion_date={ds}/*".format(**locals()),
@@ -54,10 +58,18 @@ file_sensor = S3KeySensor(
 )
 
 
-refresh_table = BashOperator(
-    task_id="refresh-blacklist",
+refresh_bl_raw_table = BashOperator(
+    task_id="hive-refresh-blacklist_raw",
     bash_command=refresh_table,
     params={"database": "operations_matrix", "table": "blacklist_raw"},
+    dag=enrich_black_list
+)
+
+
+refresh_bl_access_table = BashOperator(
+    task_id="impala-refresh-blacklist_access",
+    bash_command=refresh_impala,
+    params={"database": "operations_matrix", "table": "blacklist_access"},
     dag=enrich_black_list
 )
 
@@ -84,4 +96,4 @@ enrich_blacklist = SparkSubmitOperator(
     pool='default_pool',
     dag=enrich_black_list
 )
-file_sensor >> refresh_table >> enrich_blacklist
+file_sensor >> refresh_bl_raw_table >> enrich_blacklist >> refresh_bl_access_table

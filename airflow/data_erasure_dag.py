@@ -9,8 +9,8 @@ from airflow.operators.bash_operator import BashOperator
 import json
 import glob
 
-daily_schedule = "5 11 * * *"
-start_schedule = datetime.strptime("2020-10-09","%Y-%m-%d")
+daily_schedule = "15 02 * * *"
+start_schedule = datetime.strptime("2020-11-19","%Y-%m-%d")
 # start_schedule = airflow.utils.dates.days_ago(5)
 ds = "{{ ds }}"
 prev_ds = "{{ prev_execution_date_success }}"
@@ -30,7 +30,7 @@ default_args = {
     #'on_failure_callback': email_sender.task_failure_callback
 }
 load_to_access = DAG(
-    'data-erasure-v5',
+    'data-erasure',
     default_args=default_args,
     start_date=start_schedule,
     schedule_interval=daily_schedule,
@@ -42,7 +42,7 @@ load_to_access = DAG(
 is_active_default = "false"
 refresh_table = """
         kinit -k -t {{ var.value.keytab }} {{ var.value.principal }}
-        impala-shell -i {{ var.value.impala_loadbalancer }} -q "use {{ params.database }}; invalidate metadata {{ params.table }};"
+        impala-shell -i {{ var.value.impala_loadbalancer }} -q "use {{ params.database }}; invalidate metadata {{ params.table }}; invalidate metadata operations_matrix.data_erasure_matrix;"
         """
 # beeline -u 'jdbc:hive2://lb-impala-c03fa9db7669945b.elb.eu-north-1.amazonaws.com:21050/default;principal=impala/lb-impala-c03fa9db7669945b.elb.eu-north-1.amazonaws.com@TSE.AWS.CLOUD;auth-kerberos' -e "use {{ params.database_name }}; invalidate metadata {{ params.table_name }};"
 
