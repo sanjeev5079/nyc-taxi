@@ -6,6 +6,8 @@ from datetime import timedelta, datetime
 from airflow.contrib.operators.spark_submit_operator import SparkSubmitOperator
 from airflow.operators.bash_operator import BashOperator
 # from util import email_sender
+from airflow.operators.python_operator import PythonOperator
+from util import email_sender, refresh_athena
 import json
 import glob
 
@@ -84,12 +86,18 @@ def create_table_pipeline(schema, spec, pool):
             dag=load_to_access
         )
         refresh_impala = BashOperator(
-            task_id="refresh-%s" % table,
+            task_id="refresh-impala-%s" % table,
             bash_command=refresh_table,
             params={"database": db, "table": table},
             dag=load_to_access
         )
-        erasure_job >> refresh_impala
+        refresh_athena_tables = PythonOperator(
+            task_id="refresh-athena-%s" % table,
+            python_callable=refresh_athena.athena_add_partition,
+            op_kwargs={"database_name": db, "table_name": table, "partition_value": ds},
+            dag=load_to_access
+        )
+        erasure_job >> refresh_impala >> refresh_athena_tables
 
 # Read JSON File
 def read_conf():
