@@ -1,0 +1,9 @@
+*.class
+*.log
+*.cache
+*.DS_Store
+.idea
+metastore_db/
+target
+null/
+venv/

@@ -1,0 +1,25 @@
+{
+  "exports": {
+    "tables": [
+      {
+        "is_active" : "true",
+        "db" : "access_salsa",
+        "table": "topup_topup",
+        "join_query_to_build_table_should_contain_blacklist_column": ""
+      },
+      {
+        "is_active" : "false",
+        "db" : "access_salsa",
+        "table": "subs_dummy",
+        "join_query_to_build_table_should_contain_blacklist_column": ""
+      },
+      {
+        "is_active" : "false",
+        "db" : "access_salsa",
+        "table": "stage_rt_sales_trans_serv_dummy",
+        "join_query_to_build_table_should_contain_blacklist_column": "SELECT b.org_id,\n       a.*\nFROM access_salsa.stage_rt_sales_trans_serv_dummy a\nINNER JOIN\n  (SELECT DISTINCT org_id,\n                   msisdn\n   FROM access_salsa.subs_dummy\n   WHERE msisdn IS NOT NULL ) b ON a.msisdn = b.msisdn"
+      }
+    ],
+    "pool": "spark_salsa_exports"
+  }
+}

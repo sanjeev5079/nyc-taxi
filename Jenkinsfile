@@ -1,72 +1,75 @@
-library 'stable'
-
+library 'stable@develop'
+def determineRepoName() {
+    return scm.getUserRemoteConfigs()[0].getUrl().tokenize('/').last().split("\\.")[0]
+}
 pipeline {
-  agent {
-      docker {
-          label 'linux'
-          image 'maven:3.6.3-jdk-11'
-          args containerSettings()
-          reuseNode true
-      }
-  }
-  options {
-      timestamps()
-      buildDiscarder(logRotator(numToKeepStr: '5'))
-      timeout(time: 1, unit: 'HOURS')
-  }
-  stages {
-    stage('Build and Test') {
-       steps {
-         withMaven {
-            sh 'mvn clean install'
-            junit '**/surefire-reports/*.xml'
-         }
-       }
+    options{
+        ansiColor 'xterm'
     }
-    stage('Publish Artifacts') {
-      when {
-        anyOf {
-              branch 'master'
-              branch 'develop'
+    agent {
+        label 'linux'
+    }
+    environment{
+        REPO_NAME = determineRepoName()
+    }
+    stages {
+        stage('Prepare folders'){
+            steps {
+                sh 'mkdir -p /home/jenkins/.ivy2 /home/jenkins/.sbt'
             }
         }
-        steps {
-          withMaven {
-            sh 'mvn deploy -DskipTests'
-          }
+        stage('Prepare pipeline') {
+            agent {
+                dockerfile {
+                    reuseNode true
+                }
+            }
+            stages {
+                stage('Fetch pipeline tool'){
+                    steps {
+                        sh 'pip3 install --user --extra-index-url https://nexus.se.telenor.net/repository/pypi-internal/simple --upgrade telenor-airflow-pipeline'
+                    }
+                }
+                stage('Build & Test'){
+                    steps {
+                        sh 'sbt  test assembly publishLocal'
+                    }
+                }
+                stage('Publish Snapshot'){
+                    steps{
+                        configFileProvider([configFile(fileId: 'sbt-snapshots.credentials', variable: 'CREDENTIALS_FILE')]) {
+                            sh """sbt -batch 'set credentials+=Credentials(file("${CREDENTIALS_FILE}"))' publish"""
+                        }
+                    }
+                }
+                stage('Publish Release'){
+                    when{
+                        branch 'master'
+                    }
+                    environment{
+                        APP_BUILD_VERSION="0.1.${BUILD_NUMBER}"
+                    }
+                    steps{
+                        configFileProvider([configFile(fileId: 'sbt-releases.credentials', variable: 'CREDENTIALS_FILE')]) {
+                            sh """sbt -Dapp.build.version=${APP_BUILD_VERSION} -batch 'set credentials+=Credentials(file("${CREDENTIALS_FILE}"))' publish"""
+                        }
+
+                    }
+                }
+                stage("Deploy to airflow prod"){
+//                    when{
+//                        branch 'master'
+//                    }
+                    steps {
+                        sh "~/.local/bin/pipeline deploy --name $REPO_NAME"
+                    }
+                }
+            }
+        }
+        stage('Clean') {
+            steps {
+                cleanWs()
+            }
         }
     }
-    stage('Continuous Static Analysis') {
-      when {
-        anyOf {
-          branch 'master'
-          branch 'develop'
-        }
-      }
-      steps {
-        runPersistedSonarAnalysis()
-      }
-    }
-    stage('SonarQube Reviewer') {
-      when {
-        anyOf {
-          changeRequest()
-        }
-      }
-      steps {
-        pullRequestStaticAnalysisChecks()
-      }
-    }
-  }
-  post {
-    changed {
-        email isMainlineBranch() ? leadDeveloper() : nobody()
-    }
-    regression {
-        email isChangeRequest() ? committers() : nobody()
-    }
-    success {
-        email isChangeRequest() ? committers() : nobody()
-    }
-  }
 }
