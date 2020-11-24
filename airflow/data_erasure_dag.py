@@ -93,8 +93,8 @@ def create_table_pipeline(schema, spec, pool):
         )
         refresh_athena_tables = PythonOperator(
             task_id="refresh-athena-%s" % table,
-            python_callable=refresh_athena.athena_add_partition,
-            op_kwargs={"database_name": db, "table_name": table, "partition_value": ds},
+            python_callable=refresh_athena.athena_msck_refresh,
+            op_kwargs={"database_name": db, "table_name": table},
             dag=load_to_access
         )
         erasure_job >> refresh_impala >> refresh_athena_tables
