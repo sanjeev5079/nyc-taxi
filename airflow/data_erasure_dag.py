@@ -8,10 +8,11 @@ from airflow.operators.bash_operator import BashOperator
 # from util import email_sender
 from airflow.operators.python_operator import PythonOperator
 from util import email_sender, refresh_athena
+from airflow.operators.sensors import ExternalTaskSensor
 import json
 import glob
 
-daily_schedule = "15 02 * * *"
+daily_schedule = "30 01 * * *"  # "15 02 * * *"
 start_schedule = datetime.strptime("2020-11-19","%Y-%m-%d")
 # start_schedule = airflow.utils.dates.days_ago(5)
 ds = "{{ ds }}"
@@ -56,6 +57,14 @@ def create_table_pipeline(schema, spec, pool):
         table = spec.get("table").lower()
         first_run = spec.get("first_run")
         join_query = spec.get("join_query_to_build_table_should_contain_blacklist_column")
+
+        enrich_bl_status = ExternalTaskSensor(
+            task_id='wait_for-dag_enrich_blacklist',
+            external_dag_id='enrich-blacklist-daily',
+            external_task_id=None,  # wait for whole DAG to complete
+            check_existence=True,
+            timeout=120)
+
         erasure_job = SparkSubmitOperator(
             task_id="data-erasure-%s" % table,
             application=load_jar_location,
@@ -97,7 +106,7 @@ def create_table_pipeline(schema, spec, pool):
             op_kwargs={"database_name": db, "table_name": table},
             dag=load_to_access
         )
-        erasure_job >> refresh_impala >> refresh_athena_tables
+        enrich_bl_status >> erasure_job >> refresh_impala >> refresh_athena_tables
 
 # Read JSON File
 def read_conf():
