@@ -8,7 +8,6 @@ Before building the code, comment out the test cases as it may give some compila
 <p>Same ingestion code is executed in a jupyter notebook. And results are displayed.</p>
 
 ### jupyter notebooks
-<p>There are 2 notebooks. One used for testing the ingestion code and another for 
-exploration. Output of both the notebooks are available for examination.</p>
+<p>There are 2 notebooks. Data_ingestion.ipynb has all the source code for ingestion. Notebook Data_exploration.ipynb is used for exploring the data and getting insights. Used matplotlib for create histograms, graphs etc. Output of both the notebooks are available for examination.</p>
 
     
