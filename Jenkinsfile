@@ -1,3 +1,5 @@
+// this file has not been tested. But can be used depending on the environment where job needs to be run
+
 library 'stable@develop'
 def determineRepoName() {
     return scm.getUserRemoteConfigs()[0].getUrl().tokenize('/').last().split("\\.")[0]
@@ -27,7 +29,7 @@ pipeline {
             stages {
                 stage('Fetch pipeline tool'){
                     steps {
-                        sh 'pip3 install --user --extra-index-url https://nexus.se.telenor.net/repository/pypi-internal/simple --upgrade telenor-airflow-pipeline'
+                        sh 'pip3 install --user --extra-index-url https://<----->/repository/pypi-internal/simple --upgrade <----->-airflow-pipeline'
                     }
                 }
                 stage('Build & Test'){
