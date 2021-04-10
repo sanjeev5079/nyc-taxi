@@ -1,0 +1,4 @@
+name,age,address,commission,salary,commission_datetime
+sanjeev,32,street abc,10.11,1000,2020-01-01 00:00:00
+mayank,33,street cdf, 20,1500,2020-02-02 00:00:00
+raja,32,street ghi, 20.00,2000,2020-02-02 00:00:00
