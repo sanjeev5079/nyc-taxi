@@ -1,6 +1,8 @@
-Examples for Spark 2.0 release.
+nyc-taxi data ingestion and exploration
 
-# Build
-## Sanjeev's branch to add new features.
+# jupyter notebooks
+<p>There are 2 notebooks. One used for testing the ingestion code and another for 
+exploration</p>
 
-    sbt clean package
+<p>Output of both the notebooks are available for examination.</p>
+    
