@@ -9,7 +9,7 @@
 ### Solution statement
 1. Use data from NYC taxi public data set.
 2. Write ingestion code using apache spark and scala
-3. Create analytical report using Matplotlib library using python in Jupyter notebook.
+3. Create analytical report using <strong>Matplotlib library using python in Jupyter notebook</strong>.
 
 ### Info on data:
 1. Data used is from the publically available NYC Taxi - 'yellow taxi trip records'.
